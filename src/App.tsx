@@ -1,51 +1,15 @@
-/**
- * @license
- * SPDX-License-Identifier: Apache-2.0
- */
-
-import { UserSettings } from './components/UserSettings';
-import { DocenteMainboard } from './components/DocenteMainboard';
 import { AlumnoMainboard } from './components/AlumnoMainboard';
-import { DirectivoMainboard } from './components/DirectivoMainboard';
-import { AuthPortal } from './components/AuthPortal';
-import { UserRole } from './components/MasterSwitcher';
 import { motion, AnimatePresence } from 'motion/react';
-import { useState, useEffect } from 'react';
 import { useAppContext } from './context/AppContext';
-import { ShieldAlert, Zap, AlertTriangle } from 'lucide-react';
+import { AlertTriangle, Zap } from 'lucide-react';
 
 export default function App() {
-  const { maintenanceMode, currentRole, setCurrentRole } = useAppContext();
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-
-  useEffect(() => {
-    // Check local storage for last session
-    const lastSession = localStorage.getItem('tecnolingo_session');
-    if (lastSession) {
-      setIsAuthenticated(true);
-    }
-
-    // Define global logout function
-    (window as any).tecnolingoLogout = () => {
-      localStorage.removeItem('tecnolingo_session');
-      setIsAuthenticated(false);
-    };
-  }, []);
-
-  const handleLogin = (role: UserRole) => {
-    localStorage.setItem('tecnolingo_session', role);
-    setCurrentRole(role);
-    setIsAuthenticated(true);
-  };
-
-  if (!isAuthenticated) {
-    return <AuthPortal onLogin={handleLogin} />;
-  }
+  const { maintenanceMode } = useAppContext();
 
   return (
     <div className="h-screen bg-[#061a1a] text-white font-sans selection:bg-[#DEFF9A] selection:text-black overflow-hidden relative">
       <AnimatePresence>
-        {maintenanceMode && currentRole === 'ALUMNO' && (
+        {maintenanceMode && (
           <motion.div 
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -59,7 +23,7 @@ export default function App() {
                 SISTEMA EN <span className="text-red-500">MANTENIMIENTO</span>
              </h1>
              <p className="max-w-md text-white/40 text-sm font-medium leading-relaxed">
-                El Director ha iniciado una actualización crítica de infraestructura. El acceso para alumnos está temporalmente restringido para garantizar la integridad de tus datos de ADN.
+                El sistema está temporalmente en mantenimiento para mejorar tu experiencia.
              </p>
              <div className="mt-12 flex items-center gap-4 text-[10px] font-black uppercase tracking-[0.3em] text-[#DEFF9A]/40">
                 <Zap size={14} fill="currentColor" />
@@ -69,41 +33,7 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      <AnimatePresence mode="wait">
-        {currentRole === 'DOCENTE' ? (
-          <motion.div 
-            key="docente"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.3 }}
-          >
-            <DocenteMainboard currentRole={currentRole} onRoleChange={setCurrentRole} />
-          </motion.div>
-        ) : currentRole === 'ALUMNO' ? (
-          <motion.div 
-            key="alumno"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.3 }}
-          >
-            <AlumnoMainboard currentRole={currentRole} onRoleChange={setCurrentRole} />
-          </motion.div>
-        ) : (
-          <motion.div 
-            key="director"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.3 }}
-          >
-            <DirectivoMainboard currentRole={currentRole} onRoleChange={setCurrentRole} />
-          </motion.div>
-        )}
-      </AnimatePresence>
+      <AlumnoMainboard />
     </div>
   );
 }
-
-

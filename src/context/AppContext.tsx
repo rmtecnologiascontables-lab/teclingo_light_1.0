@@ -1,8 +1,3 @@
-/**
- * @license
- * SPDX-License-Identifier: Apache-2.0
- */
-
 import React, { createContext, useContext, useState, useEffect } from 'react';
 
 type Theme = 'dark' | 'light' | 'normal';
@@ -18,7 +13,7 @@ interface Event {
   visibility: ('GLOBAL' | 'DOCENTE' | 'ALUMNO')[];
 }
 
-export type UserRole = 'DIRECTOR' | 'DOCENTE' | 'ALUMNO' | 'TUTOR';
+export type UserRole = 'DIRECTOR' | 'DOCENTE' | 'ALUMNO' | 'TUTOR' | 'ADMIN';
 
 export interface SyllabusUnit {
   number: number;
@@ -41,21 +36,13 @@ export interface Subject {
   syllabus?: Syllabus;
 }
 
-export interface Career {
-  id: string;
-  name: string;
-  claveReticula: string;
-  horasLimiteSemestre: number;
-  subjects: Subject[];
-}
-
 export interface Teacher {
   id: string;
   name: string;
   email: string;
   phone: string;
   maxHours: number;
-  qualifiedSubjects: string[]; // IDs de materias
+  qualifiedSubjects: string[];
   status: 'ACTIVE' | 'INACTIVE';
 }
 
@@ -101,7 +88,7 @@ export interface ChatThread {
 export interface FolioSignature {
   teacherId: string;
   teacherName: string;
-  signatureData: string; // Base64 signature
+  signatureData: string;
   timestamp: string;
 }
 
@@ -120,10 +107,18 @@ export interface Folio {
   content: string;
   date: string;
   senderName: string;
-  assignedToIds: string[]; // Teacher IDs
+  assignedToIds: string[];
   signatures: FolioSignature[];
   evidence: FolioEvidence[];
   status: 'PENDING' | 'COMPLETED';
+}
+
+export interface Career {
+  id: string;
+  name: string;
+  claveReticula: string;
+  horasLimiteSemestre: number;
+  subjects: Subject[];
 }
 
 interface AppContextType {
@@ -139,23 +134,7 @@ interface AppContextType {
   updateGlobalEvent: (event: Event) => void;
   deleteGlobalEvent: (id: string) => void;
   careers: Career[];
-  setCareers: (careers: Career[]) => void;
   subjects: Subject[];
-  setSubjects: (subjects: Subject[]) => void;
-  teachers: Teacher[];
-  updateTeacher: (teacher: Teacher) => void;
-  groups: Group[];
-  addGroup: (group: Group) => void;
-  updateGroup: (group: Group) => void;
-  deleteGroup: (id: string) => void;
-  chats: ChatThread[];
-  addMessage: (chatId: string, message: Message) => void;
-  createGroupChat: (groupId: string, name: string, participants: string[]) => void;
-  folios: Folio[];
-  addFolio: (folio: Folio) => void;
-  signFolio: (folioId: string, signature: FolioSignature) => void;
-  addFolioEvidence: (folioId: string, evidence: FolioEvidence) => void;
-  completeFolio: (folioId: string) => void;
   isSidebarOpen: boolean;
   setIsSidebarOpen: (isOpen: boolean) => void;
   isSidebarCollapsed: boolean;
@@ -169,29 +148,15 @@ interface AppContextType {
   maintenanceMode: boolean;
   setMaintenanceMode: (mode: boolean) => void;
   currentRole: UserRole;
-  setCurrentRole: (role: UserRole) => void;
   isExtracurricularUnlocked: boolean;
   setIsExtracurricularUnlocked: (isUnlocked: boolean) => void;
-  managementEnabled: boolean;
-  setManagementEnabled: (enabled: boolean) => void;
-  coursesEnabled: boolean;
-  setCoursesEnabled: (enabled: boolean) => void;
-  foliosEnabled: boolean;
-  setFoliosEnabled: (enabled: boolean) => void;
-  identityEnabled: boolean;
-  setIdentityEnabled: (enabled: boolean) => void;
-  reticularEnabled: boolean;
-  setReticularEnabled: (enabled: boolean) => void;
-  distributionEnabled: boolean;
-  setDistributionEnabled: (enabled: boolean) => void;
 }
 
 const mockEvents: Event[] = [
   { id: '1', day: 15, title: 'Examen Global A1', type: 'SCHOOL', description: 'Evaluación final del primer bloque de Basic English.', time: '08:00 AM', visibility: ['GLOBAL'] },
   { id: '2', day: 20, title: 'Día de la Revolución', type: 'HOLIDAY', description: 'Suspensión de labores académicas por fecha oficial.', time: 'Todo el día', visibility: ['GLOBAL'] },
-  { id: '3', day: 22, title: 'AI Workshop: Prompt Engineering', type: 'TECLINGO', description: 'Taller presencial sobre el uso de la IA en la creación de prompts para aprendizaje de idiomas.', time: '04:00 PM', visibility: ['ALUMNO', 'DOCENTE'] },
+  { id: '3', day: 22, title: 'AI Workshop: Prompt Engineering', type: 'TECLINGO', description: 'Taller presencial sobre el uso de la IA en la creación de prompts para aprendizaje de idiomas.', time: '04:00 PM', visibility: ['ALUMNO'] },
   { id: '4', day: 25, title: 'Lanzamiento: Album AR Linguistic', type: 'TECLINGO', description: 'Evento especial con realidad aumentada para la presentación de nuevo material auditivo.', time: '06:00 PM', visibility: ['GLOBAL'] },
-  { id: '5', day: 10, title: 'Junta de Docentes', type: 'SCHOOL', description: 'Reunión de coordinación pedagógica ciclo 2026-A.', time: '01:00 PM', visibility: ['DOCENTE'] },
 ];
 
 const translations = {
@@ -260,220 +225,21 @@ const translations = {
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
-  const [currentRole, setCurrentRole] = useState<UserRole>(() => (localStorage.getItem('tecnolingo_session') as UserRole) || 'DIRECTOR');
+  const currentRole: UserRole = 'ALUMNO';
   const [isExtracurricularUnlocked, setIsExtracurricularUnlocked] = useState(() => localStorage.getItem('extracurricular_unlocked') === 'true');
 
-  const [managementEnabled, setManagementEnabledImpl] = useState<boolean>(() => {
-    const persisted = localStorage.getItem('teclingo_management_enabled');
-    return persisted !== 'false';
-  });
-
-  const [coursesEnabled, setCoursesEnabledImpl] = useState<boolean>(() => {
-    const persisted = localStorage.getItem('teclingo_courses_enabled');
-    return persisted !== 'false';
-  });
-
-  const [foliosEnabled, setFoliosEnabledImpl] = useState<boolean>(() => {
-    const persisted = localStorage.getItem('teclingo_folios_enabled');
-    return persisted !== 'false';
-  });
-
-  const [identityEnabled, setIdentityEnabledImpl] = useState<boolean>(() => {
-    const persisted = localStorage.getItem('teclingo_identity_enabled');
-    return persisted !== 'false';
-  });
-
-  const [reticularEnabled, setReticularEnabledImpl] = useState<boolean>(() => {
-    const persisted = localStorage.getItem('teclingo_reticular_enabled');
-    return persisted !== 'false';
-  });
-
-  const [distributionEnabled, setDistributionEnabledImpl] = useState<boolean>(() => {
-    const persisted = localStorage.getItem('teclingo_distribution_enabled');
-    return persisted !== 'false';
-  });
-
-  const setManagementEnabled = (enabled: boolean) => {
-    setManagementEnabledImpl(enabled);
-    localStorage.setItem('teclingo_management_enabled', String(enabled));
-  };
-
-  const setCoursesEnabled = (enabled: boolean) => {
-    setCoursesEnabledImpl(enabled);
-    localStorage.setItem('teclingo_courses_enabled', String(enabled));
-  };
-
-  const setFoliosEnabled = (enabled: boolean) => {
-    setFoliosEnabledImpl(enabled);
-    localStorage.setItem('teclingo_folios_enabled', String(enabled));
-  };
-
-  const setIdentityEnabled = (enabled: boolean) => {
-    setIdentityEnabledImpl(enabled);
-    localStorage.setItem('teclingo_identity_enabled', String(enabled));
-  };
-
-  const setReticularEnabled = (enabled: boolean) => {
-    setReticularEnabledImpl(enabled);
-    localStorage.setItem('teclingo_reticular_enabled', String(enabled));
-  };
-
-  const setDistributionEnabled = (enabled: boolean) => {
-    setDistributionEnabledImpl(enabled);
-    localStorage.setItem('teclingo_distribution_enabled', String(enabled));
-  };
   const [theme, setTheme] = useState<Theme>(() => (localStorage.getItem('theme') as Theme) || 'dark');
   const [language, setLanguage] = useState<Language>(() => (localStorage.getItem('lang') as Language) || 'es');
   const [userProgress, setUserProgress] = useState(75);
   const [globalEvents, setGlobalEvents] = useState<Event[]>(mockEvents);
-  const [careers, setCareers] = useState<Career[]>([
-    {
-      id: 'car-dem-001',
-      name: 'Ingeniería en Sistemas Computacionales',
-      claveReticula: 'IINF-2010-220',
-      horasLimiteSemestre: 33,
-      subjects: [
-        {
-          id: 'sub-dem-001',
-          clave: 'TEC-001',
-          name: 'TecLingo AI (Inglés I)',
-          weeklyHours: 4,
-          careerId: 'car-dem-001',
-          semester: 1,
-          syllabus: {
-            generalObjective: 'Desarrollar la competencia comunicativa bilingüe en entornos tecnológicos y de desarrollo de software.',
-            units: [
-              {
-                number: 1,
-                title: 'Fundamentos de TI',
-                topics: ['Vocabulary: Hardware Components', 'Grammar: Present Simple', 'Reading: Tech Documentation']
-              },
-              {
-                number: 2,
-                title: 'Lógica y Algoritmos',
-                topics: ['Conditionals (If/Else)', 'Logic operators', 'Function names and verbs']
-              }
-            ]
-          }
-        }
-      ]
-    }
-  ]);
-  const [subjects, setSubjects] = useState<Subject[]>([]);
-  const [teachers, setTeachers] = useState<Teacher[]>([
-    {
-      id: 'USR-901-B33',
-      name: 'Prof. Armando Paredes',
-      email: 'armando@tecnolingo.ai',
-      phone: '555-0101',
-      maxHours: 40,
-      qualifiedSubjects: [],
-      status: 'ACTIVE'
-    }
-  ]);
-  const [groups, setGroups] = useState<Group[]>([
-    {
-      id: 'GRP-001',
-      name: 'Pioneers A1 - Morning',
-      level: '1',
-      careerId: '',
-      subjects: [],
-      teacherId: 'USR-901-B33',
-      studentIds: ['USR-001-A22', 'USR-221-C99'],
-      schedule: {},
-      time: '08:00 AM',
-      days: ['LUN', 'MIÉ', 'VIE'],
-      status: 'ACTIVE'
-    }
-  ]);
-  const [chats, setChats] = useState<ChatThread[]>([
-    {
-      id: 'CHAT-GLOBAL',
-      name: 'Difusión Institucional',
-      type: 'GLOBAL',
-      participants: [],
-      messages: [
-        { id: '1', senderId: 'DIR-001', senderName: 'Dirección', senderRole: 'DIRECTOR', content: 'Bienvenidos al ciclo 2026-A.', timestamp: '10:00 AM', isDirector: true }
-      ],
-      unreadCount: 0
-    },
-    {
-      id: 'TEA-2026-042',
-      name: 'Mtra. Ana López (Docente Elite)',
-      type: 'DIRECT',
-      participants: ['TEA-2026-042', 'STU-2026-001'],
-      messages: [
-        { id: 'm1', senderId: 'TEA-2026-042', senderName: 'Mtra. Ana López', senderRole: 'DOCENTE', content: 'Hello Student! I am your assigned Elite Coach for Subject Pronouns and Fluency development. Let me know if you would like some live support!', timestamp: '09:12 AM' }
-      ],
-      lastMessage: 'Hello Student! I am your assigned Elite Coach...',
-      unreadCount: 0
-    },
-    {
-      id: 'GRP-001',
-      name: 'Pioneers A1 - Morning (Grupo)',
-      type: 'GROUP',
-      participants: ['USR-901-B33', 'USR-001-A22', 'USR-221-C99'],
-      messages: [],
-      unreadCount: 0
-    }
-  ]);
+  const [careers] = useState<Career[]>([]);
+  const [subjects] = useState<Subject[]>([]);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [folios, setFolios] = useState<Folio[]>([
-    {
-      id: 'FOL-2026-042',
-      title: 'Circular Informativa 042',
-      subject: 'Protocolo de Evaluación Verano',
-      content: 'Estimados docentes, se les recuerda que a partir del próximo ciclo el porcentaje de evidencia diaria impactará en el 15% del KPI Operativo...',
-      date: '12 MAY, 2026',
-      senderName: 'Dirección Central',
-      assignedToIds: ['USR-901-B33'],
-      signatures: [],
-      evidence: [],
-      status: 'PENDING'
-    }
-  ]);
-
-  const addFolio = (folio: Folio) => {
-    setFolios(prev => [folio, ...prev]);
-  };
-
-  const signFolio = (folioId: string, signature: FolioSignature) => {
-    setFolios(prev => prev.map(f => {
-      if (f.id === folioId) {
-        return {
-          ...f,
-          signatures: [...f.signatures, signature]
-        };
-      }
-      return f;
-    }));
-  };
-
-  const addFolioEvidence = (folioId: string, item: FolioEvidence) => {
-    setFolios(prev => prev.map(f => {
-      if (f.id === folioId) {
-        return {
-          ...f,
-          evidence: [...f.evidence, item]
-        };
-      }
-      return f;
-    }));
-  };
-
-  const completeFolio = (folioId: string) => {
-    setFolios(prev => prev.map(f => f.id === folioId ? { ...f, status: 'COMPLETED' } : f));
-  };
-
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
-  const [institutionName, setInstitutionName] = useState('TECNOLINGO AI');
+  const [institutionName, setInstitutionName] = useState('TECLINGO AI');
   const [institutionLogo, setInstitutionLogo] = useState('https://raw.githubusercontent.com/lucide-react/lucide/main/icons/zap.svg');
   const [quickChatUser, setQuickChatUser] = useState<any | null>(null);
   const [maintenanceMode, setMaintenanceMode] = useState(false);
-
-  useEffect(() => {
-    localStorage.setItem('tecnolingo_session', currentRole);
-  }, [currentRole]);
 
   useEffect(() => {
     localStorage.setItem('extracurricular_unlocked', String(isExtracurricularUnlocked));
@@ -483,7 +249,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem('theme', theme);
     const root = window.document.documentElement;
     root.classList.remove('light', 'dark');
-    
+
     if (theme === 'normal') {
       const systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
       root.classList.add(systemTheme);
@@ -512,81 +278,21 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setGlobalEvents(prev => prev.filter(e => e.id !== id));
   };
 
-  const updateTeacher = (teacher: Teacher) => {
-    setTeachers(prev => prev.map(t => t.id === teacher.id ? teacher : t));
-  };
-  
-  const addGroup = (group: Group) => {
-    setGroups(prev => [...prev, group]);
-    createGroupChat(group.id, `${group.name} (Grupo)`, [group.teacherId, ...group.studentIds]);
-  };
-
-  const updateGroup = (group: Group) => {
-    setGroups(prev => prev.map(g => g.id === group.id ? group : g));
-  };
-
-  const deleteGroup = (id: string) => {
-    setGroups(prev => prev.filter(g => g.id !== id));
-    setChats(prev => prev.filter(c => c.id !== id));
-  };
-
-  const addMessage = (chatId: string, message: Message) => {
-    setChats(prev => prev.map(chat => {
-      if (chat.id === chatId) {
-        return {
-          ...chat,
-          messages: [...chat.messages, message],
-          lastMessage: message.content,
-          unreadCount: chat.unreadCount + 1
-        };
-      }
-      return chat;
-    }));
-  };
-
-  const createGroupChat = (groupId: string, name: string, participants: string[]) => {
-    const newChat: ChatThread = {
-      id: groupId,
-      name,
-      type: 'GROUP',
-      participants,
-      messages: [],
-      unreadCount: 0
-    };
-    setChats(prev => [...prev, newChat]);
-  };
-
   return (
-    <AppContext.Provider value={{ 
-      theme, 
-      language, 
-      setTheme, 
-      setLanguage, 
-      t, 
-      userProgress, 
-      setUserProgress, 
-      globalEvents, 
+    <AppContext.Provider value={{
+      theme,
+      language,
+      setTheme,
+      setLanguage,
+      t,
+      userProgress,
+      setUserProgress,
+      globalEvents,
       addGlobalEvent,
       updateGlobalEvent,
       deleteGlobalEvent,
       careers,
-      setCareers,
       subjects,
-      setSubjects,
-      teachers,
-      updateTeacher,
-      groups,
-      addGroup,
-      updateGroup,
-      deleteGroup,
-      chats,
-      addMessage,
-      createGroupChat,
-      folios,
-      addFolio,
-      signFolio,
-      addFolioEvidence,
-      completeFolio,
       isSidebarOpen,
       setIsSidebarOpen,
       isSidebarCollapsed,
@@ -600,21 +306,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       maintenanceMode,
       setMaintenanceMode,
       currentRole,
-      setCurrentRole,
       isExtracurricularUnlocked,
-      setIsExtracurricularUnlocked,
-      managementEnabled,
-      setManagementEnabled,
-      coursesEnabled,
-      setCoursesEnabled,
-      foliosEnabled,
-      setFoliosEnabled,
-      identityEnabled,
-      setIdentityEnabled,
-      reticularEnabled,
-      setReticularEnabled,
-      distributionEnabled,
-      setDistributionEnabled
+      setIsExtracurricularUnlocked
     }}>
       {children}
     </AppContext.Provider>

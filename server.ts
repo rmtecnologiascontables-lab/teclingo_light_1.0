@@ -55,23 +55,59 @@ app.post("/api/tutor", async (req, res) => {
     let finalSystemPrompt = '';
     if (mode === 'native') {
       speedLabel = 'Native';
-      finalSystemPrompt = "You are SafePal in NATIVE MODE. Speak fluently, naturally and complexly. You MUST write BETWEEN 15 AND 25 WORDS TOTAL. Do not write short fragments.";
+      finalSystemPrompt = `You are a highly articulate native English speaker with encyclopedic knowledge. Discuss any topic with sophistication — film, science, culture, history, philosophy — using varied vocabulary and natural grammatical structures.
+
+ABSOLUTE BANS:
+- Never repeat the same word or phrase across consecutive sentences.
+- Do NOT use filler crutches like "always", "journey", "perfectly", "absolutely", "truly", "indeed", or similar padding.
+- Do NOT include the user's name in every response. Use it sparingly and naturally, as a real person would.
+- Never sound like a template, advertisement, or customer-service bot.
+
+YOUR ONLY CONSTRAINT:
+- Every response MUST contain between 7 and 25 words. Express a complete, fluid, and elegant idea within that range.
+- If asked in Spanish, reply with perfectly fluent, natural, native-level Spanish — not broken translator output.
+
+OUTPUT: Return ONLY the clean reply text. No quotes, no metadata, no markdown.`;
     } else if (mode === 'casual') {
       speedLabel = 'Casual';
-      finalSystemPrompt = "You are SafePal in CASUAL BRIDGE MODE. Speak friendly. You MUST write BETWEEN 7 AND 10 WORDS TOTAL.";
+      finalSystemPrompt = `You are a sharp, warm, and witty native English conversationalist. You can effortlessly chat about any topic — movies, music, tech, travel, daily life — with a relaxed and genuine tone.
+
+ABSOLUTE BANS:
+- Never echo the same vocabulary across replies. Vary your word choice.
+- Do NOT use robotic crutch words like "always", "journey", "absolutely", "great", "perfect", "indeed".
+- Do NOT overuse the user's name. Once every several messages is plenty.
+- Never sound like a scripted language tutor. Be a real person.
+
+YOUR ONLY CONSTRAINT:
+- Every response MUST contain between 7 and 10 words. Keep it warm, punchy, and complete.
+- If asked in Spanish, reply with natural, fluid, native-level Spanish.
+
+OUTPUT: Return ONLY the clean reply text. No quotes, no metadata, no markdown.`;
     } else {
       let minWords = 0, maxWords = 0;
       const speed = parseFloat(currentSpeed) || 1.0;
       if (speed <= 0.60) {
-        minWords = 1; maxWords = 3; speedLabel = '0.60x';
+        minWords = 7; maxWords = 10; speedLabel = '0.60x';
       } else if (speed <= 0.75) {
-        minWords = 3; maxWords = 5; speedLabel = '0.75x';
+        minWords = 10; maxWords = 15; speedLabel = '0.75x';
       } else if (speed <= 0.88) {
-        minWords = 5; maxWords = 10; speedLabel = '0.88x';
+        minWords = 15; maxWords = 20; speedLabel = '0.88x';
       } else {
-        minWords = 10; maxWords = 15; speedLabel = '1.00x';
+        minWords = 20; maxWords = 25; speedLabel = '1.00x';
       }
-      finalSystemPrompt = `You are SafePal in BASIC MODE. Keep it short based on speed: between ${minWords} and ${maxWords} words.`;
+      finalSystemPrompt = `You are an eloquent, knowledgeable native English speaker with broad expertise across culture, science, arts, technology, and everyday life. You sound like an intelligent adult having a natural conversation — never like a teacher, script, or robot.
+
+ABSOLUTE BANS:
+- Never repeat the same word or phrase in back-to-back sentences.
+- Do NOT use generic filler words ever ("always", "journey", "great", "perfectly", "absolutely", "indeed", "truly", "wonderful").
+- Do NOT insert the user's name unless it feels completely natural and you have not used it recently.
+- No formulaic structures. Each response must feel fresh and spontaneous.
+
+YOUR ONLY CONSTRAINT:
+- Every response MUST contain between ${minWords} and ${maxWords} words. Write a complete, flowing, intellectually honest thought within that range.
+- If asked in Spanish, reply with perfectly fluid, natural, native-level Spanish.
+
+OUTPUT: Return ONLY the clean reply text. No quotes, no metadata, no markdown.`;
     }
 
     const messages: any[] = [
@@ -325,56 +361,67 @@ app.post("/api/grammar/verify", async (req, res) => {
   }
 });
 
-// ElevenLabs Neural TTS Proxy (voces hiperrealistas HD)
-// Usa la API key de TTS_API_KEY en .env.local
+// Google Translate TTS Proxy (gratuito, sin API key)
+// Regla estricta: máximo 25 palabras para audios dinámicos
 app.post("/api/tts", async (req, res) => {
-  const { text, gender } = req.body;
+  const { text } = req.body;
   if (!text) return res.status(400).json({ error: "Text is required" });
 
-  const apiKey = process.env.TTS_API_KEY;
-  if (!apiKey) {
-    console.warn("[TTS] TTS_API_KEY no configurada — usando fallback offline");
-    // Fallback: genera un audio mudo indicando que no hay voz premium disponible
-    return res.status(503).json({ error: "TTS_API_KEY not configured" });
-  }
+  // Filtro estricto: limpiar texto y truncar a 25 palabras máximo
+  const cleanText = text.replace(/\s+/g, ' ').trim();
+  const words = cleanText.split(' ');
+  const truncated = words.slice(0, 25).join(' ');
+  console.log(`[TTS] Texto original: ${words.length} palabras | Truncado: ${truncated.split(' ').length} palabras`);
 
-  // Voces premium ElevenLabs: Rachel (femenino) y Thomas (masculino)
-  const VOICE_IDS: Record<string, string> = {
-    female: "21m00Tcm4TlvDq8ikWAM", // Rachel — voz clara, profesional, nativa
-    male: "yoZ06aMxZJJ28mfd3POQ",   // Thomas — voz profunda, articulada
-  };
-  const voiceId = gender === 'male' ? VOICE_IDS.male : VOICE_IDS.female;
+  const lang = "en";
 
+  // Bypass de velocidad: si mide ≤ 160 chars, petición directa sin chunking
   try {
-    const response = await fetch(
-      `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`,
-      {
-        method: "POST",
-        headers: {
-          "Accept": "audio/mpeg",
-          "Content-Type": "application/json",
-          "xi-api-key": apiKey,
-        },
-        body: JSON.stringify({
-          text,
-          model_id: "eleven_monolingual_v1",
-          voice_settings: {
-            stability: 0.3,
-            similarity_boost: 0.75,
-          },
-        }),
+    if (truncated.length <= 160) {
+      const url = `https://translate.google.com/translate_tts?ie=UTF-8&tl=${lang}&client=tw-ob&q=${encodeURIComponent(truncated)}`;
+      const response = await fetch(url, {
+        headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" }
+      });
+      if (!response.ok) {
+        console.error("[TTS] Google TTS error:", response.status);
+        return res.status(502).json({ error: "TTS upstream failed" });
       }
-    );
-
-    if (!response.ok) {
-      const errText = await response.text();
-      console.error("[TTS] ElevenLabs error:", response.status, errText);
-      return res.status(502).json({ error: "TTS upstream failed" });
+      const buf = Buffer.from(await response.arrayBuffer());
+      res.set("Content-Type", "audio/mpeg");
+      return res.send(buf);
     }
 
-    const audioBuffer = Buffer.from(await response.arrayBuffer());
+    // Respaldo: texto > 160 chars (casi imposible con 25 palabras), fragmentar seguro
+    const MAX_CHARS = 160;
+    const chunks: string[] = [];
+    let remaining = truncated;
+    while (remaining.length > 0) {
+      if (remaining.length <= MAX_CHARS) {
+        chunks.push(remaining);
+        break;
+      }
+      let cut = remaining.lastIndexOf(' ', MAX_CHARS);
+      if (cut === -1) cut = MAX_CHARS;
+      chunks.push(remaining.slice(0, cut));
+      remaining = remaining.slice(cut).trim();
+    }
+
+    const buffers: Buffer[] = [];
+    for (const chunk of chunks) {
+      const url = `https://translate.google.com/translate_tts?ie=UTF-8&tl=${lang}&client=tw-ob&q=${encodeURIComponent(chunk)}`;
+      const response = await fetch(url, {
+        headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" }
+      });
+      if (!response.ok) {
+        console.error("[TTS] Google TTS error en chunk:", response.status);
+        return res.status(502).json({ error: "TTS upstream failed" });
+      }
+      const buf = Buffer.from(await response.arrayBuffer());
+      buffers.push(buf);
+    }
+
     res.set("Content-Type", "audio/mpeg");
-    res.send(audioBuffer);
+    res.send(Buffer.concat(buffers));
   } catch (error) {
     console.error("[TTS] Proxy error:", error);
     res.status(500).json({ error: "TTS proxy failed" });
