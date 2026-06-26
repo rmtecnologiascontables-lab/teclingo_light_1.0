@@ -261,8 +261,28 @@ export function TheBridge({ onClose }: { onClose: () => void }) {
       audio.play();
     } catch (error) {
       console.error('[TheBridge TTS] Error:', error);
-      setIsPlaying(false);
-      setActiveWordIndex(null);
+      // Fallback to browser speechSynthesis
+      try {
+        const utterance = new SpeechSynthesisUtterance(phrase);
+        utterance.lang = 'en-US';
+        utterance.rate = 0.9;
+        utterance.onend = () => {
+          setIsPlaying(false);
+          setActiveWordIndex(null);
+          audioRef.current = null;
+        };
+        utterance.onerror = () => {
+          setIsPlaying(false);
+          setActiveWordIndex(null);
+          audioRef.current = null;
+        };
+        speechSynthesis.speak(utterance);
+      } catch (speechError) {
+        console.error('[TheBridge] speechSynthesis fallback failed:', speechError);
+        setIsPlaying(false);
+        setActiveWordIndex(null);
+        audioRef.current = null;
+      }
     }
   };
 

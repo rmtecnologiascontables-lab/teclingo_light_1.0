@@ -213,7 +213,24 @@ export function ListeningLab({ onClose }: { onClose: () => void }) {
       setIsPlaying(true);
     } catch (error) {
       console.error('[ListeningLab TTS] Error:', error);
-      setIsPlaying(false);
+      // Fallback to browser speechSynthesis
+      try {
+        const utterance = new SpeechSynthesisUtterance(currentPhrase.text);
+        utterance.lang = 'en-US';
+        utterance.rate = speed;
+        utterance.onend = () => {
+          setIsPlaying(false);
+          audioRef.current = null;
+        };
+        utterance.onerror = () => {
+          setIsPlaying(false);
+          audioRef.current = null;
+        };
+        speechSynthesis.speak(utterance);
+      } catch (speechError) {
+        console.error('[ListeningLab] speechSynthesis fallback failed:', speechError);
+        setIsPlaying(false);
+      }
     }
   };
 
