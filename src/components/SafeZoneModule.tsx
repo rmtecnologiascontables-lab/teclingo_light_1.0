@@ -59,6 +59,26 @@ PERSONALIZATION: The student enjoys {actividad_preferida}, uses {red_social}, an
 
 OUTPUT: Return ONLY the clean reply text. No quotes, no metadata, no markdown.`;
 
+const INTEREST_TRANSLATIONS: Record<string, string> = {
+  'Comida': 'food',
+  'Películas/Series': 'movies and series',
+  'Viajes': 'traveling',
+  'Videojuegos': 'video games',
+  'Deportes': 'sports',
+  'Música': 'music',
+  'Podcast Geek': 'geek podcasts',
+  'Cocina': 'cooking',
+  'TikTok': 'TikTok',
+  'Instagram': 'Instagram',
+  'YouTube': 'YouTube',
+  'X/Reddit': 'X and Reddit',
+  'Myspace': 'Myspace',
+};
+
+function translateInterest(spanish: string): string {
+  return INTEREST_TRANSLATIONS[spanish] || spanish;
+}
+
 export function SafeZoneModule() {
   // Onboarding completed state stored in local storage
   const [isOnboarded, setIsOnboarded] = useState<boolean>(() => {
@@ -103,8 +123,8 @@ export function SafeZoneModule() {
     if (saved) return JSON.parse(saved);
     const savedOnboarding = localStorage.getItem('safezone_onboarding_data');
     const data = savedOnboarding ? JSON.parse(savedOnboarding) : {};
-    const hobby = data.actividad_preferida || 'Comida';
-    const channel = data.entretenimiento || 'Películas/Series';
+    const hobby = translateInterest(data.actividad_preferida || 'Comida');
+    const channel = translateInterest(data.entretenimiento || 'Películas/Series');
     return [{
       id: 'welcome',
       sender: 'ai',
@@ -382,12 +402,38 @@ export function SafeZoneModule() {
     }
   };
 
-  // Toggle Translation
-  const toggleTranslation = (id: string) => {
-    setRevealedTranslations(prev => ({
-      ...prev,
-      [id]: !prev[id]
-    }));
+  // Toggle Translation — fetch on first request
+  const toggleTranslation = async (id: string) => {
+    const msg = messages.find(m => m.id === id);
+    if (!msg) return;
+
+    // If hiding, just toggle
+    if (revealedTranslations[id]) {
+      setRevealedTranslations(prev => ({ ...prev, [id]: false }));
+      return;
+    }
+
+    // Fetch translation if not cached
+    if (!msg.translation) {
+      try {
+        const res = await fetch('/api/translate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text: msg.text }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          const translation = data.translation || '';
+          setMessages(prev => prev.map(m =>
+            m.id === id ? { ...m, translation } : m
+          ));
+        }
+      } catch (e) {
+        console.warn('SafeZone: Translation fetch failed:', e);
+      }
+    }
+
+    setRevealedTranslations(prev => ({ ...prev, [id]: true }));
   };
 
   // Onboarding Question Choices
@@ -402,7 +448,7 @@ export function SafeZoneModule() {
       const welcomeMsg: ChatMessage = {
         id: 'welcome',
         sender: 'ai',
-        text: `Hi there! I'm Pal. Let's practice English talking about ${onboarding.actividad_preferida} and ${onboarding.entretenimiento}. How are you today?`,
+        text: `Hi there! I'm Pal. Let's practice English talking about ${translateInterest(onboarding.actividad_preferida)} and ${translateInterest(onboarding.entretenimiento)}. How are you today?`,
         translation: '',
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       };
@@ -422,7 +468,7 @@ export function SafeZoneModule() {
       setMessages([{
         id: 'welcome',
         sender: 'ai',
-        text: `Hi there! I'm Pal. Let's practice English talking about ${onboarding.actividad_preferida} and ${onboarding.entretenimiento}. How are you today?`,
+        text: `Hi there! I'm Pal. Let's practice English talking about ${translateInterest(onboarding.actividad_preferida)} and ${translateInterest(onboarding.entretenimiento)}. How are you today?`,
         translation: '',
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       }]);
@@ -448,9 +494,9 @@ export function SafeZoneModule() {
     // Intentar con Groq real via backend
     try {
       const systemPrompt = SAFEZONE_SYSTEM_PROMPT
-        .replace('{actividad_preferida}', onboarding.actividad_preferida)
-        .replace('{red_social}', onboarding.red_social)
-        .replace('{entretenimiento}', onboarding.entretenimiento)
+        .replace('{actividad_preferida}', translateInterest(onboarding.actividad_preferida))
+        .replace('{red_social}', translateInterest(onboarding.red_social))
+        .replace('{entretenimiento}', translateInterest(onboarding.entretenimiento))
         .replace('{companion_type}', onboarding.companion_type || 'friend');
 
       const history = messages.map(m => ({
@@ -468,9 +514,9 @@ export function SafeZoneModule() {
           history,
           systemPrompt,
           currentSpeed,
-          hobby: onboarding.actividad_preferida,
-          socialNetwork: onboarding.red_social,
-          channel: onboarding.entretenimiento,
+          hobby: translateInterest(onboarding.actividad_preferida),
+          socialNetwork: translateInterest(onboarding.red_social),
+          channel: translateInterest(onboarding.entretenimiento),
           escritoPercibido: percepcion.nivel_escrito_percibido,
           temorConversacional: percepcion.nivel_conversacional_percibido,
           conversationMode,

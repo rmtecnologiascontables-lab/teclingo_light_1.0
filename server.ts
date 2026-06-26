@@ -428,6 +428,34 @@ app.post("/api/tts", async (req, res) => {
   }
 });
 
+// AI Translation endpoint (English -> Spanish)
+app.post("/api/translate", async (req, res) => {
+  const { text } = req.body;
+  if (!text) return res.status(400).json({ error: "Text is required" });
+
+  try {
+    const groq = getGroq();
+    const completion = await groq.chat.completions.create({
+      model: "llama-3.3-70b-versatile",
+      messages: [
+        {
+          role: "system",
+          content: "You are a translator. Translate the given English text to Spanish. Return ONLY the translated text, no quotes, no metadata, no explanation.",
+        },
+        { role: "user", content: text },
+      ],
+      temperature: 0.3,
+      max_tokens: 200,
+    });
+
+    const translation = completion.choices[0]?.message?.content?.trim() || "";
+    res.json({ translation });
+  } catch (error) {
+    console.error("[Translate] Error:", error);
+    res.status(502).json({ error: "Translation failed" });
+  }
+});
+
 // Export Express app for Vercel serverless
 export default app;
 
