@@ -222,9 +222,9 @@ export function SafeZoneModule() {
     }
   }, []);
 
-  const handleToggleRecord = () => {
+  const handleToggleRecord = async () => {
     if (isRecording) {
-      recordingStartTimeRef.current = 0; // Intentional stop
+      recordingStartTimeRef.current = 0;
       if (recognitionRef.current) {
         try {
           recognitionRef.current.stop();
@@ -235,13 +235,37 @@ export function SafeZoneModule() {
         setIsRecording(false);
       }
     } else {
+      // iOS: despertar AudioContext
+      try {
+        const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+        if (AudioContextClass) {
+          const audioCtx = new AudioContextClass();
+          if (audioCtx.state === 'suspended') {
+            await audioCtx.resume();
+          }
+        }
+      } catch (e) {
+        console.warn("SafeZone: AudioContext resume failed:", e);
+      }
+
+      // iOS: solicitar permiso explícito antes de SpeechRecognition
+      let micGranted = false;
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+        stream.getTracks().forEach(t => t.stop());
+        micGranted = true;
+      } catch (err) {
+        console.error("SafeZone: getUserMedia permission denied:", err);
+        setRecognitionError('Permiso de micrófono denegado. Ve a Configuración > Safari > Micrófono y activa "Permitir".');
+        return;
+      }
+
       if (recognitionRef.current) {
         try {
           recordingStartTimeRef.current = Date.now();
           recognitionRef.current.start();
         } catch (e) {
           console.error(e);
-          // If start itself throws an exception immediately, fall back to simulation
           setIsRecording(true);
           setTimeout(() => {
             const simulatedPhrases = [
@@ -258,7 +282,6 @@ export function SafeZoneModule() {
           }, 1500);
         }
       } else {
-        // Fallback simulation text if Speech API not supported/active in sandboxed iframe environment
         setIsRecording(true);
         setTimeout(() => {
           const simulatedPhrases = [

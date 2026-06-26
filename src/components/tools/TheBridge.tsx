@@ -160,8 +160,11 @@ export function TheBridge({ onClose }: { onClose: () => void }) {
         };
 
         recognition.onerror = (event: any) => {
-          console.warn("TheBridge: Speech Recognition captured error gracefully:", event.error);
+          console.warn("TheBridge: Speech Recognition error:", event.error);
           setIsRecording(false);
+          if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
+            setFeedback('iOS requiere permiso de micrófono. Ve a Configuración > Safari > Micrófono y activa "Permitir", luego recarga la página.');
+          }
         };
 
         recognition.onend = () => {
@@ -263,7 +266,31 @@ export function TheBridge({ onClose }: { onClose: () => void }) {
     }
   };
 
-  const handleStartRecording = () => {
+  const handleStartRecording = async () => {
+    // iOS: despertar AudioContext (Safari lo duerme por defecto)
+    try {
+      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+      if (AudioContextClass) {
+        const audioCtx = new AudioContextClass();
+        if (audioCtx.state === 'suspended') {
+          await audioCtx.resume();
+        }
+      }
+    } catch (e) {
+      console.warn("TheBridge: AudioContext resume failed:", e);
+    }
+
+    // iOS: solicitar permiso explícito de micrófono antes de SpeechRecognition
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+      stream.getTracks().forEach(t => t.stop());
+    } catch (err) {
+      console.error("TheBridge: getUserMedia permission denied:", err);
+      setIsRecording(false);
+      setFeedback('Permiso de micrófono denegado. Ve a Configuración > Safari > Micrófono y permite el acceso, luego intenta de nuevo.');
+      return;
+    }
+
     setIsRecording(true);
     setTranscript('');
     if (recognitionRef.current) {
