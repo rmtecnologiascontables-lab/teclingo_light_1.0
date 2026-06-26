@@ -6,7 +6,7 @@
 import express from "express";
 import Groq from "groq-sdk";
 import dotenv from "dotenv";
-import { GRAMMAR_LIBRARY } from "../src/components/tools/grammarLibraryData";
+import { GRAMMAR_LIBRARY } from "./grammarLibraryData";
 
 dotenv.config();
 
